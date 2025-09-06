@@ -1,0 +1,13 @@
+# Terraform files
+.terraform/
+*.tfstate
+*.tfstate.backup
+terraform.tfvars
+*.lock.hcl
+
+# Lambda zip file (contains code, but you can version it separately if needed)
+lambda_function.zip
+
+# Local environment files
+.env
+*.log
