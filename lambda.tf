@@ -9,7 +9,7 @@ resource "aws_lambda_function" "weather_ingestion" {
   timeout       = 30
   environment {
     variables = {
-      VISUAL_CROSSING_API_KEY = "your_visual_crossing_api_key"  # Replace with actual key
+      VISUAL_CROSSING_API_KEY = "${var.visualcrossing_api_key}"  # Replace with actual key
       S3_RAW_BUCKET           = aws_s3_bucket.weather_raw.bucket
     }
   }
