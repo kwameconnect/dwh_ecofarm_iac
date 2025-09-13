@@ -1,22 +1,15 @@
 # /iac/s3.tf
 
-# Generate a random suffix to ensure bucket name uniqueness
-resource "random_string" "suffix" {
-  length  = 8
-  special = false
-  upper   = false
-}
-
-resource "aws_s3_bucket" "weather_raw" {
-  bucket = "weather-raw-data-${random_string.suffix.result}"
+resource "aws_s3_bucket" "forecast_raw" {
+  bucket = "forecast-raw-data-${random_string.suffix.result}"
   tags = {
-    Name = "Weather Raw Data"
+    Name = "forecast Raw Data"
   }
 }
 
-resource "aws_s3_bucket" "weather_processed" {
-  bucket = "weather-processed-data-${random_string.suffix.result}"
+resource "aws_s3_bucket" "forecast_processed" {
+  bucket = "forecast-processed-data-${random_string.suffix.result}"
   tags = {
-    Name = "Weather Processed Data"
+    Name = "forecast Processed Data"
   }
 }
