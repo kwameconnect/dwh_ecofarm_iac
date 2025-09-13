@@ -11,7 +11,3 @@ terraform {
     }
   }
 }
-
-provider "aws" {
-  region = "eu-north-1" # Free Tier-eligible region
-}

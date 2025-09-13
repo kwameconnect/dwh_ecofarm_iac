@@ -23,3 +23,18 @@ variable "visualcrossing_api_key" {
   sensitive   = true
 }
 
+variable "instance_type" {
+  description = "EC2 instance type (restricted to free tier eligible)"
+  type        = string
+  default     = "t2.micro"
+
+  validation {
+    condition     = contains(["t2.micro", "t3.micro"], var.instance_type)
+    error_message = "Only t2.micro and t3.micro are allowed (free-tier eligible)."
+  }
+}
+
+variable "budget_email" {
+  description = "Email for budget alerts"
+  type        = string
+}
