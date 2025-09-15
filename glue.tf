@@ -22,7 +22,7 @@ resource "aws_glue_job" "forecast_etl" {
   default_arguments = {
     "--job-language" = "python"
   }
-  max_capacity = 0.0625 # Minimum for Python shell, Free Tier eligible
+  max_capacity = 1.0 # Free Tier eligible [https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/glue_job#max_capacity-2]
 }
 
 resource "aws_iam_role" "glue_role" {

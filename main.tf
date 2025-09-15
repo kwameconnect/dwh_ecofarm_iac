@@ -31,11 +31,28 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Fetch the latest Amazon Linux 2 AMI (free-tier eligible)
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+
 # -------------------------------
 # EC2 Instance (Free-Tier Eligible)
 # -------------------------------
 resource "aws_instance" "free_tier" {
-  ami           = "ami-0c55b159cbfafe1f0" # Amazon Linux 2 (us-east-1 example)
+  ami           = data.aws_ami.amazon_linux.id   # 👈 dynamically fetched
   instance_type = var.instance_type
 
   tags = {
@@ -43,38 +60,8 @@ resource "aws_instance" "free_tier" {
   }
 }
 
-# -------------------------------
-# S3 Bucket (Free-Tier Eligible)
-# -------------------------------
-resource "aws_s3_bucket" "free_tier" {
-  bucket = "free-tier-demo-${random_id.suffix.hex}"
-  acl    = "private"
-
-  tags = {
-    Name = "free-tier-s3"
-  }
-}
-
 resource "random_id" "suffix" {
   byte_length = 4
-}
-
-# -------------------------------
-# DynamoDB Table (Free-Tier Eligible)
-# -------------------------------
-resource "aws_dynamodb_table" "free_tier" {
-  name         = "free-tier-table"
-  billing_mode = "PAY_PER_REQUEST" # free-tier covers 25GB storage
-  hash_key     = "id"
-
-  attribute {
-    name = "id"
-    type = "S"
-  }
-
-  tags = {
-    Name = "free-tier-dynamodb"
-  }
 }
 
 # -------------------------------

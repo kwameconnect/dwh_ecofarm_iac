@@ -38,3 +38,9 @@ variable "budget_email" {
   description = "Email for budget alerts"
   type        = string
 }
+
+variable "region" {
+  description = "Region of AWS infrastructure"
+  type        = string
+  default     = "eu-north-1"
+}
