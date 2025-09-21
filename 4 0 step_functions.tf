@@ -1,25 +1,28 @@
-# step_functions.tf
+# step_functions.tf: forecast_etl->forecast_proc_crawler
+# 1.: forecast_etl.py -> raw bucket ->clean nulls -> processed bucket
+# 2.: crawl S3 raw bucket data into gluedb catalog
+
 resource "aws_sfn_state_machine" "forecast_pipeline" {
   name     = "forecast-pipeline"
   role_arn = aws_iam_role.step_functions_role.arn
   definition = jsonencode({
     Comment = "Weather Forecast DWH Pipeline",
-    StartAt = "RunCrawler",
+    StartAt = "RunETLJob",
     States = {
-      RunCrawler = {
-        Type     = "Task",
-        Resource = "arn:aws:states:::aws-sdk:glue:startCrawler",
-        Parameters = {
-          Name = aws_glue_crawler.forecast_raw_crawler.name
-        },
-        Next = "RunETLJob"
-      },
       RunETLJob = {
         Type     = "Task",
         Resource = "arn:aws:states:::glue:startJobRun",
         Parameters = {
           JobName = aws_glue_job.forecast_etl.name
         },
+      Next = "RunCrawler"  
+      },
+      RunCrawler = {
+        Type     = "Task",
+        Resource = "arn:aws:states:::aws-sdk:glue:startCrawler",
+        Parameters = {
+          Name = aws_glue_crawler.forecast_proc_crawler.name
+        }
         End = true
       }
     }

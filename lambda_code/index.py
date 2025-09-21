@@ -1,4 +1,4 @@
-# /iac/lambda_code/index.py
+# /iac/lambda_code/index.py: downloads api response to S3 raw_bucket as facts and dimensions in json files 
 import requests
 import boto3
 import json
@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 
 def handler(event, context):
     # Configuration from environment variables
-    api_key = os.getenv("VISUAL_CROSSING_API_KEY")
-    bucket = os.getenv("S3_RAW_BUCKET")
+    api_key = os.getenv("VISUALCROSSING_API_KEY")
+    raw_bucket = os.getenv("S3_RAW_BUCKET")
     latitude = 5.574
     longitude = -0.565
     city = "Samsamso Ecofarm"
@@ -40,11 +40,11 @@ def handler(event, context):
     download_day = int(datetime.now(timezone.utc).strftime("%d"))
     download_month = int(datetime.now(timezone.utc).strftime("%m"))
     download_year = int(datetime.now(timezone.utc).strftime("%Y"))
-    download_time_id = hash(download_timestamp) % 1000000  # Simple key generation
+    download_time_id = hash(download_timestamp) % 1000000
 
     download_time_data = {
         "download_time_id": download_time_id,
-        "timestamp": download_date,  # Matches DATE type
+        "timestamp": download_date,
         "hour": download_hour,
         "day": download_day,
         "month": download_month,
@@ -78,7 +78,7 @@ def handler(event, context):
             # Forecast time data (for forecast_time_dim)
             forecast_time_data = {
                 "forecast_time_id": forecast_time_id,
-                "date": forecast_date,  # Matches DATE type
+                "date": forecast_date,
                 "hour": hour,
                 "day": forecast_day,
                 "month": forecast_month,
@@ -89,7 +89,7 @@ def handler(event, context):
             forecast_record = {
                 "forecast_id": f"{location_id}_{forecast_time_id}_{context.aws_request_id}",
                 "location_id": location_id,
-                "time_id": download_time_id,  # Links to download_time_dim
+                "time_id": download_time_id,
                 "temperature_c": float(hour_data["temp"]),
                 "rain_mm": float(hour_data["precip"]),
                 "solarradiation_w": float(hour_data["solarradiation"]),
@@ -100,10 +100,10 @@ def handler(event, context):
             }
             forecast_records.append(forecast_record)
 
-            # Write forecast_time data to S3
+            # Write forecast_time data to S3 raw bucket
             try:
                 s3.put_object(
-                    Bucket=bucket,
+                    Bucket=raw_bucket,
                     Key=f"forecast_time/{forecast_time_data['forecast_time_id']}.json",
                     Body=json.dumps(forecast_time_data)
                 )
@@ -113,15 +113,15 @@ def handler(event, context):
                     "body": json.dumps({"error": f"S3 write failed for forecast_time: {str(e)}"})
                 }
 
-    # Write location and download_time data to S3 (once per execution)
+    # Write location and download_time data to S3 raw bucket
     try:
         s3.put_object(
-            Bucket=bucket,
+            Bucket=raw_bucket,
             Key=f"location/{location_data['location_id']}.json",
             Body=json.dumps(location_data)
         )
         s3.put_object(
-            Bucket=bucket,
+            Bucket=raw_bucket,
             Key=f"download_time/{download_time_data['download_time_id']}.json",
             Body=json.dumps(download_time_data)
         )
@@ -131,11 +131,11 @@ def handler(event, context):
             "body": json.dumps({"error": f"S3 write failed for dimension data: {str(e)}"})
         }
 
-    # Write forecast data to S3
+    # Write forecast data to S3 raw bucket
     try:
         for record in forecast_records:
             s3.put_object(
-                Bucket=bucket,
+                Bucket=raw_bucket,
                 Key=f"forecast/{record['forecast_id']}.json",
                 Body=json.dumps(record)
             )

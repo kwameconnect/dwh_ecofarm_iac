@@ -1,5 +1,5 @@
-# /iac/lambda.tf
-resource "aws_lambda_function" "forecast_ingest" {
+# /iac/lambda.tf invokes lambda_function.zip -> index.py: api response -> S3 forecast_raw bucket as facts&dimensions .json
+resource "aws_lambda_function" "forecast_api_ingest" {
   function_name    = "forecast-api-ingest"
   handler          = "index.handler"
   runtime          = "python3.9"
@@ -13,10 +13,10 @@ resource "aws_lambda_function" "forecast_ingest" {
       S3_RAW_BUCKET          = aws_s3_bucket.forecast_raw.bucket
     }
   }
-  # /iac/lambda.tf (add to aws_lambda_function.forecast_ingest)
+  # /iac/lambda.tf (add to aws_lambda_function.forecast_api_ingest)
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
-    security_group_ids = [aws_security_group.redshift_sg.id]
+    security_group_ids = [aws_security_group.dwh_sg.id]
   }
 }
 
@@ -46,8 +46,21 @@ resource "aws_iam_role_policy" "lambda_policy" {
         ]
       },
       {
-        Effect   = "Allow"
-        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
         Resource = "*"
       }
     ]
