@@ -5,15 +5,9 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
 
   # Enable logging into CloudWatch Logs
   logging_configuration {
-    level                  = "ALL"  # Options: OFF, ERROR, ALL
+    level                  = "ALL" # Options: OFF, ERROR, ALL
     include_execution_data = true
-    destinations = [
-      {
-        cloudwatch_logs_log_group = {
-          log_group_arn = aws_cloudwatch_log_group.step_functions_logs.arn
-        }
-      }
-    ]
+    log_destination        = "${aws_cloudwatch_log_group.step_functions_logs.arn}:*"
   }
 
   definition = jsonencode({
@@ -29,7 +23,7 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
         Next = "RunETLJob",
         Retry = [
           {
-            ErrorEquals     = ["Lambda.ServiceException","Lambda.AWSLambdaException","Lambda.SdkClientException"],
+            ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
             IntervalSeconds = 10,
             MaxAttempts     = 3,
             BackoffRate     = 2.0
@@ -51,7 +45,7 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
         Next = "RunCrawler",
         Retry = [
           {
-            ErrorEquals     = ["Glue.AWSGlueException","Glue.SdkClientException"],
+            ErrorEquals     = ["Glue.AWSGlueException", "Glue.SdkClientException"],
             IntervalSeconds = 30,
             MaxAttempts     = 2,
             BackoffRate     = 2.0
@@ -73,7 +67,7 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
         End = true,
         Retry = [
           {
-            ErrorEquals     = ["Glue.AWSGlueException","Glue.SdkClientException"],
+            ErrorEquals     = ["Glue.AWSGlueException", "Glue.SdkClientException"],
             IntervalSeconds = 30,
             MaxAttempts     = 2,
             BackoffRate     = 2.0
@@ -125,13 +119,68 @@ resource "aws_iam_role_policy" "step_functions_policy" {
         Resource = aws_lambda_function.forecast_api_ingest.arn
       },
       {
-        Effect   = "Allow",
-        Action   = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogDelivery",
+          "logs:GetLogDelivery",
+          "logs:UpdateLogDelivery",
+          "logs:DeleteLogDelivery",
+          "logs:ListLogDeliveries",
+          "logs:PutLogEvents",
+          "logs:CreateLogStream"
         ],
         Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:PutResourcePolicy",
+          "logs:DescribeResourcePolicies",
+          "logs:DeleteResourcePolicy"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:PutRetentionPolicy"
+        ],
+        Resource = aws_cloudwatch_log_group.step_functions_logs.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "step_functions_logs_policy" {
+  name = "step-functions-logs-policy"
+  role = aws_iam_role.step_functions_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogDelivery",
+          "logs:GetLogDelivery",
+          "logs:UpdateLogDelivery",
+          "logs:DeleteLogDelivery",
+          "logs:ListLogDeliveries",
+          "logs:PutLogEvents",
+          "logs:CreateLogStream"
+        ]
+        Resource = [
+          "${aws_cloudwatch_log_group.step_functions_logs.arn}:*"
+        ]
       }
     ]
   })
@@ -141,4 +190,34 @@ resource "aws_iam_role_policy" "step_functions_policy" {
 resource "aws_cloudwatch_log_group" "step_functions_logs" {
   name              = "/aws/states/forecast_pipeline"
   retention_in_days = 30
+}
+
+resource "aws_iam_role" "eventbridge_sfn_role" {
+  name = "eventbridge-sfn-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "events.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "eventbridge_sfn_policy" {
+  role = aws_iam_role.eventbridge_sfn_role.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = "states:StartExecution",
+        Resource = aws_sfn_state_machine.forecast_pipeline.arn
+      }
+    ]
+  })
 }

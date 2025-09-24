@@ -9,10 +9,9 @@ resource "aws_s3_object" "glue_script" {
 }
 
 resource "aws_glue_job" "forecast_etl" {
-  name     = "forecast-etl-job"
-  role_arn = aws_iam_role.glue_role.arn
+  name        = "forecast-etl-job"
+  role_arn    = aws_iam_role.glue_role.arn
   description = "run forecast_etl.py to clean NULLs"
-  number_of_workers = 1 #optional, default: 5
   command {
     script_location = "s3://${aws_s3_bucket.forecast_raw.bucket}/scripts/forecast_etl.py"
     python_version  = "3"
