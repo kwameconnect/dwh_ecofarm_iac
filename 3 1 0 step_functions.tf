@@ -80,6 +80,7 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
           }
         ]
       },
+
       FailState = {
         Type  = "Fail",
         Error = "PipelineFailed",
@@ -194,6 +195,7 @@ resource "aws_cloudwatch_log_group" "step_functions_logs" {
 
 resource "aws_iam_role" "eventbridge_sfn_role" {
   name = "eventbridge-sfn-role"
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -221,3 +223,4 @@ resource "aws_iam_role_policy" "eventbridge_sfn_policy" {
     ]
   })
 }
+

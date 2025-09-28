@@ -1,9 +1,46 @@
 # /iac/lambda_code/index.py: downloads api response to S3 raw_bucket as facts and dimensions in json files 
-import requests
-import boto3
+import logging
 import json
 import os
-from datetime import datetime, timezone
+import boto3
+import requests
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def handler(event, context):
+    logger.info("Lambda started")
+    try:
+        api_key = os.environ["VISUALCROSSING_API_KEY"]
+        bucket = os.environ["S3_RAW_BUCKET"]
+
+        logger.info(f"API key loaded, target bucket: {bucket}")
+
+        # Example API call
+        response = requests.get(
+            f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/Accra?key={api_key}"
+        )
+        logger.info(f"API status code: {response.status_code}")
+
+        if response.status_code != 200:
+            raise Exception(f"API failed: {response.text}")
+
+        data = response.json()
+        logger.info(f"Received {len(data)} top-level keys")
+
+        # Upload to S3
+        s3 = boto3.client("s3")
+        s3.put_object(
+            Bucket=bucket,
+            Key="forecast.json",
+            Body=json.dumps(data).encode("utf-8")
+        )
+
+        logger.info("File written to S3")
+        return {"status": "success"}
+    except Exception as e:
+        logger.error("Lambda failed", exc_info=True)
+        raise
 
 def handler(event, context):
     # Configuration from environment variables

@@ -9,15 +9,8 @@ resource "aws_cloudwatch_event_target" "step_functions_target" {
   rule      = aws_cloudwatch_event_rule.daily_pipeline_trigger.name
   target_id = "forecast-pipeline"
   arn       = aws_sfn_state_machine.forecast_pipeline.arn
-  role_arn  = aws_iam_role.eventbridge_sfn_role.arn 
+  role_arn  = aws_iam_role.eventbridge_sfn_role.arn
 
-}
-
-resource "aws_lambda_permission" "allow_step_functions" {
-  statement_id  = "AllowExecutionFromStepFunctions"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.forecast_api_ingest.function_name
-  principal     = "states.amazonaws.com"
 }
 
 # Allow CloudWatch Events to start the Step Function

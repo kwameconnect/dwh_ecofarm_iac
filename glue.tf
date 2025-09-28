@@ -36,10 +36,10 @@ resource "aws_glue_crawler" "forecast_proc_crawler" {
   description   = "Crawls S3 forecast processed data"
 
   s3_target {
-    path = "s3://forecast-processed-data-${random_string.suffix.result}/"
+    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast/"
   }
 
-  schedule = "cron(0 0 * * ? *)" # Run daily at midnight UTC
+  #schedule = "cron(0 0 * * ? *)" # Run daily at midnight UTC
 }
 
 # IAM role for Glue
