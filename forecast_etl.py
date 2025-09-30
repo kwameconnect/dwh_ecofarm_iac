@@ -1,150 +1,110 @@
 import boto3
 import pandas as pd
-import io
 import os
-import sys
 import json
-import logging
-from datetime import datetime, timezone
-from awsglue.utils import getResolvedOptions
+from io import StringIO
+from datetime import datetime
 
-# --- Configure logging (visible in CloudWatch) ---
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-
-# --- Read Glue job arguments ---
-args = getResolvedOptions(sys.argv, ["RAW_BUCKET", "PROC_BUCKET"])
-RAW_BUCKET = args["RAW_BUCKET"]
-PROC_BUCKET = args["PROC_BUCKET"]
-
-# S3 client
 s3 = boto3.client("s3")
 
-# Checkpoint key inside processed bucket
-CHECKPOINT_KEY = "checkpoints/last_file.txt"
+RAW_BUCKET = os.environ.get("RAW_BUCKET", "your-raw-bucket")
+PROCESSED_BUCKET = os.environ.get("PROCESSED_BUCKET", "your-processed-bucket")
+CHECKPOINT_FILE = os.environ.get("CHECKPOINT_FILE", "checkpoints/forecast_etl.json")
 
-# Mapping raw prefixes to processed target paths
-PREFIX_MAP = {
-    "download_time/": "forecast/download_time/",
-    "forecast/": "forecast/forecast/",
-    "forecast_time/": "forecast/forecast_time/",
-    "location/": "forecast/location/",
-}
+# These are your known raw data prefixes
+RAW_PREFIXES = [
+    "download_time/",
+    "forecast/",
+    "forecast_time/",
+    "location/"
+]
 
 
-def get_last_checkpoint():
+def load_checkpoint():
     try:
-        obj = s3.get_object(Bucket=PROC_BUCKET, Key=CHECKPOINT_KEY)
-        checkpoint = obj["Body"].read().decode("utf-8").strip()
-        logger.info(f"Loaded checkpoint: {checkpoint}")
-        return checkpoint
+        obj = s3.get_object(Bucket=PROCESSED_BUCKET, Key=CHECKPOINT_FILE)
+        return json.loads(obj["Body"].read().decode("utf-8"))
     except s3.exceptions.NoSuchKey:
-        logger.info("No checkpoint found. Processing all files in raw bucket.")
-        return None
+        print("[INFO] No checkpoint found. Starting from the beginning.")
+        return {}
+    except Exception as e:
+        print(f"[WARN] Could not load checkpoint: {e}")
+        return {}
 
 
-def save_checkpoint(last_file_key):
+def save_checkpoint(checkpoint_data):
     s3.put_object(
-        Bucket=PROC_BUCKET,
-        Key=CHECKPOINT_KEY,
-        Body=last_file_key.encode("utf-8"),
+        Bucket=PROCESSED_BUCKET,
+        Key=CHECKPOINT_FILE,
+        Body=json.dumps(checkpoint_data).encode("utf-8"),
     )
-    logger.info(f"Saved checkpoint: {last_file_key}")
 
 
-def clean_and_save(raw_key):
-    logger.info(f"Processing raw file: {raw_key}")
+def list_new_files(prefix, last_checkpoint):
+    """List files under a prefix that are newer than last checkpoint."""
+    paginator = s3.get_paginator("list_objects_v2")
+    page_iterator = paginator.paginate(Bucket=RAW_BUCKET, Prefix=prefix)
 
-    # Download raw file
-    raw_obj = s3.get_object(Bucket=RAW_BUCKET, Key=raw_key)
-    raw_data = raw_obj["Body"].read()
-
-    # Load JSON safely
-    try:
-        record = json.loads(raw_data)
-    except json.JSONDecodeError as e:
-        logger.error(f"Skipping {raw_key}, invalid JSON: {e}")
-        return
-
-    # Convert to DataFrame depending on structure
-    if isinstance(record, dict):
-        df = pd.DataFrame([record])
-    elif isinstance(record, list):
-        df = pd.DataFrame(record)
-    else:
-        logger.error(f"Unsupported JSON format in {raw_key}")
-        return
-
-    # Drop nulls
-    before_rows = len(df)
-    df_clean = df.dropna()
-    after_rows = len(df_clean)
-    logger.info(f"Cleaned data: dropped {before_rows - after_rows} null rows.")
-
-    # Determine prefix mapping
-    matched_prefix = None
-    for raw_prefix, proc_prefix in PREFIX_MAP.items():
-        if raw_key.startswith(raw_prefix):
-            matched_prefix = proc_prefix
-            break
-
-    if not matched_prefix:
-        logger.error(f"No target mapping found for {raw_key}")
-        return
-
-    # Partitioned output path by date
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    base_name = os.path.basename(raw_key).replace(".json", ".parquet")
-    output_key = f"{matched_prefix}date={today}/{base_name}"
-
-    # Save cleaned file as Parquet
-    buffer = io.BytesIO()
-    df_clean.to_parquet(buffer, index=False)
-    buffer.seek(0)
-
-    s3.put_object(Bucket=PROC_BUCKET, Key=output_key, Body=buffer.getvalue())
-    logger.info(f"Processed and saved: {output_key}")
+    new_files = []
+    for page in page_iterator:
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            last_modified = obj["LastModified"].isoformat()
+            if prefix not in last_checkpoint or last_modified > last_checkpoint[prefix]:
+                new_files.append((key, last_modified))
+    return new_files
 
 
-def main():
-    logger.info("Starting ETL job...")
+def process_file(key):
+    """Download and return the file content as a DataFrame (assuming CSV)."""
+    obj = s3.get_object(Bucket=RAW_BUCKET, Key=key)
+    body = obj["Body"].read().decode("utf-8")
+    return pd.read_csv(StringIO(body))
 
-    # Get checkpoint
-    last_checkpoint = get_last_checkpoint()
 
-    # List all files in raw bucket
-    all_files = []
-    for prefix in PREFIX_MAP.keys():
-        response = s3.list_objects_v2(Bucket=RAW_BUCKET, Prefix=prefix)
-        if "Contents" in response:
-            all_files.extend([obj["Key"] for obj in response["Contents"]])
+def run_etl():
+    checkpoint = load_checkpoint()
+    new_checkpoint = checkpoint.copy()
 
-    logger.info(f"Found {len(all_files)} files in raw bucket.")
+    for prefix in RAW_PREFIXES:
+        print(f"[INFO] Checking prefix: {prefix}")
+        new_files = list_new_files(prefix, checkpoint)
 
-    # If checkpoint exists, skip already processed files
-    if last_checkpoint and last_checkpoint in all_files:
-        start_index = all_files.index(last_checkpoint) + 1
-        new_files = all_files[start_index:]
-    else:
-        new_files = all_files
+        if not new_files:
+            print(f"[INFO] No new files for prefix {prefix}")
+            continue
 
-    if not new_files:
-        logger.info("No new files to process.")
-        return
+        dfs = []
+        for key, lm in new_files:
+            print(f"[INFO] Processing file: {key}")
+            try:
+                df = process_file(key)
+                dfs.append(df)
+            except Exception as e:
+                print(f"[ERROR] Failed to process {key}: {e}")
 
-    # Process new files
-    for raw_key in new_files:
-        clean_and_save(raw_key)
+        if dfs:
+            combined = pd.concat(dfs, ignore_index=True)
 
-    # Update checkpoint to the last processed file
-    save_checkpoint(new_files[-1])
-    logger.info(f"Updated checkpoint to: {new_files[-1]}")
-    logger.info("ETL job finished successfully.")
+            # Output file per run per dimension
+            out_key = f"{prefix.rstrip('/')}/processed/run_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
+            csv_buf = StringIO()
+            combined.to_csv(csv_buf, index=False)
+
+            s3.put_object(
+                Bucket=PROCESSED_BUCKET,
+                Key=out_key,
+                Body=csv_buf.getvalue().encode("utf-8"),
+            )
+            print(f"[INFO] Wrote processed file: {out_key}")
+
+            # Update checkpoint with the newest last_modified
+            latest_lm = max([lm for _, lm in new_files])
+            new_checkpoint[prefix] = latest_lm
+
+    save_checkpoint(new_checkpoint)
+    print("[INFO] Checkpoint updated.")
 
 
 if __name__ == "__main__":
-    main()
+    run_etl()
