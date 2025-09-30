@@ -18,6 +18,8 @@ resource "aws_glue_job" "forecast_etl" {
   }
   default_arguments = {
     "--job-language" = "python"
+    "--RAW_BUCKET"   = aws_s3_bucket.forecast_raw.bucket
+    "--PROC_BUCKET"  = aws_s3_bucket.forecast_processed.bucket
   }
   max_capacity = 1.0 # Free Tier eligible [https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/glue_job#max_capacity-2]
 }
@@ -33,10 +35,22 @@ resource "aws_glue_crawler" "forecast_proc_crawler" {
   database_name = aws_glue_catalog_database.ecofarm_gluedb.name
   name          = "forecast-proc-crawler"
   role          = aws_iam_role.glue_role.arn
-  description   = "Crawls S3 forecast processed data"
+  description   = "Crawls processed forecast data on S3"
 
   s3_target {
-    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast/"
+    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/location_dim"
+  }
+
+  s3_target {
+    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/forecast_fact"
+  }
+
+  s3_target {
+    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/downloadt_time_dim"
+  }
+
+  s3_target {
+    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/forcast_time_dim"
   }
 
   #schedule = "cron(0 0 * * ? *)" # Run daily at midnight UTC

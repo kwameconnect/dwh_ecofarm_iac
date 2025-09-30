@@ -1,14 +1,17 @@
 import boto3
 import pandas as pd
 import os
+import sys
 import json
 from io import StringIO
 from datetime import datetime
+from awsglue.utils import getResolvedOptions
 
 s3 = boto3.client("s3")
 
-RAW_BUCKET = os.environ.get("RAW_BUCKET", "your-raw-bucket")
-PROCESSED_BUCKET = os.environ.get("PROCESSED_BUCKET", "your-processed-bucket")
+args = getResolvedOptions(sys.argv, ["RAW_BUCKET", "PROC_BUCKET"])
+RAW_BUCKET = args["RAW_BUCKET"]
+PROC_BUCKET = args["PROC_BUCKET"]
 CHECKPOINT_FILE = os.environ.get("CHECKPOINT_FILE", "checkpoints/forecast_etl.json")
 
 # These are your known raw data prefixes
@@ -22,10 +25,10 @@ RAW_PREFIXES = [
 
 def load_checkpoint():
     try:
-        obj = s3.get_object(Bucket=PROCESSED_BUCKET, Key=CHECKPOINT_FILE)
+        obj = s3.get_object(Bucket=PROC_BUCKET, Key=CHECKPOINT_FILE)
         return json.loads(obj["Body"].read().decode("utf-8"))
     except s3.exceptions.NoSuchKey:
-        print("[INFO] No checkpoint found. Starting from the beginning.")
+        print("[INFO] No checkpoint found. Scanning all files.")
         return {}
     except Exception as e:
         print(f"[WARN] Could not load checkpoint: {e}")
@@ -34,7 +37,7 @@ def load_checkpoint():
 
 def save_checkpoint(checkpoint_data):
     s3.put_object(
-        Bucket=PROCESSED_BUCKET,
+        Bucket=PROC_BUCKET,
         Key=CHECKPOINT_FILE,
         Body=json.dumps(checkpoint_data).encode("utf-8"),
     )
@@ -87,12 +90,12 @@ def run_etl():
             combined = pd.concat(dfs, ignore_index=True)
 
             # Output file per run per dimension
-            out_key = f"{prefix.rstrip('/')}/processed/run_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
+            out_key = f"{prefix.rstrip('/')}/run_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
             csv_buf = StringIO()
             combined.to_csv(csv_buf, index=False)
 
             s3.put_object(
-                Bucket=PROCESSED_BUCKET,
+                Bucket=PROC_BUCKET,
                 Key=out_key,
                 Body=csv_buf.getvalue().encode("utf-8"),
             )
