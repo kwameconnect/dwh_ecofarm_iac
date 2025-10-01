@@ -14,10 +14,10 @@ resource "aws_lambda_function" "forecast_api_ingest" {
     }
   }
   # /iac/lambda.tf (add to aws_lambda_function.forecast_api_ingest)
-  vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
-    security_group_ids = [aws_security_group.dwh_sg.id]
-  }
+  #vpc_config {
+  #  subnet_ids         = aws_subnet.private[*].id
+  #  security_group_ids = [aws_security_group.dwh_sg.id]
+  #}
 }
 
 resource "aws_iam_role" "lambda_role" {

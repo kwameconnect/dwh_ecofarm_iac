@@ -123,7 +123,7 @@ def handler(event, context):
                 "year": forecast_year
             }
 
-            # Forecast fact data (for forecast_data_fact)
+            # Forecast fact data (for forecast_fact table)
             forecast_record = {
                 "forecast_id": f"{location_id}_{forecast_time_id}_{context.aws_request_id}",
                 "location_id": location_id,
@@ -138,11 +138,11 @@ def handler(event, context):
             }
             forecast_records.append(forecast_record)
 
-            # Write forecast_time data to S3 raw bucket
+            # Write forecast_time_dim data to S3 raw bucket
             try:
                 s3.put_object(
                     Bucket=raw_bucket,
-                    Key=f"forecast_time/{forecast_time_data['forecast_time_id']}.json",
+                    Key=f"forecast_data/forecast_time_dim/{forecast_time_data['forecast_time_id']}.json",
                     Body=json.dumps(forecast_time_data)
                 )
             except Exception as e:
@@ -151,16 +151,16 @@ def handler(event, context):
                     "body": json.dumps({"error": f"S3 write failed for forecast_time: {str(e)}"})
                 }
 
-    # Write location and download_time data to S3 raw bucket
+    # Write location_dim and download_time_dim data to S3 raw bucket
     try:
         s3.put_object(
             Bucket=raw_bucket,
-            Key=f"location/{location_data['location_id']}.json",
+            Key=f"forecast_data/location_dim/{location_data['location_id']}.json",
             Body=json.dumps(location_data)
         )
         s3.put_object(
             Bucket=raw_bucket,
-            Key=f"download_time/{download_time_data['download_time_id']}.json",
+            Key=f"forecast_data/download_time_dim/{download_time_data['download_time_id']}.json",
             Body=json.dumps(download_time_data)
         )
     except Exception as e:
@@ -169,12 +169,12 @@ def handler(event, context):
             "body": json.dumps({"error": f"S3 write failed for dimension data: {str(e)}"})
         }
 
-    # Write forecast data to S3 raw bucket
+    # Write forecast_fact data to S3 raw bucket
     try:
         for record in forecast_records:
             s3.put_object(
                 Bucket=raw_bucket,
-                Key=f"forecast/{record['forecast_id']}.json",
+                Key=f"forecast_data/forecast_fact/{record['forecast_id']}.json",
                 Body=json.dumps(record)
             )
     except Exception as e:
