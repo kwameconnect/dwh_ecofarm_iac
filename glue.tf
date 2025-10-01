@@ -21,7 +21,8 @@ resource "aws_glue_job" "forecast_etl" {
     "--RAW_BUCKET"   = aws_s3_bucket.forecast_raw.bucket
     "--PROC_BUCKET"  = aws_s3_bucket.forecast_processed.bucket
   }
-  max_capacity = 1.0 # Free Tier eligible [https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/glue_job#max_capacity-2]
+  worker_type       = "G.1X"
+  number_of_workers = 10
 }
 
 # Glue database for the DWH
@@ -46,11 +47,11 @@ resource "aws_glue_crawler" "forecast_proc_crawler" {
   }
 
   s3_target {
-    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/downloadt_time_dim"
+    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/download_time_dim"
   }
 
   s3_target {
-    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/forcast_time_dim"
+    path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/forecast_time_dim"
   }
 
   #schedule = "cron(0 0 * * ? *)" # Run daily at midnight UTC
