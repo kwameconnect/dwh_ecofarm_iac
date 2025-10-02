@@ -127,7 +127,7 @@ def handler(event, context):
             forecast_record = {
                 "forecast_id": f"{location_id}_{forecast_time_id}_{context.aws_request_id}",
                 "location_id": location_id,
-                "time_id": download_time_id,
+                "time_id": forecast_time_id,
                 "temperature_c": float(hour_data["temp"]),
                 "rain_mm": float(hour_data["precip"]),
                 "solarradiation_w": float(hour_data["solarradiation"]),
