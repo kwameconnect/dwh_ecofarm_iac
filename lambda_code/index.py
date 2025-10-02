@@ -116,7 +116,7 @@ def handler(event, context):
             # Forecast time data (for forecast_time_dim)
             forecast_time_data = {
                 "forecast_time_id": forecast_time_id,
-                "date": forecast_date,
+                "date": f"{forecast_date}T{hour:02d}:00:00Z",
                 "hour": hour,
                 "day": forecast_day,
                 "month": forecast_month,
