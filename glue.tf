@@ -53,9 +53,228 @@ resource "aws_glue_crawler" "forecast_proc_crawler" {
   s3_target {
     path = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/forecast_time_dim"
   }
-
-  #schedule = "cron(0 0 * * ? *)" # Run daily at midnight UTC
 }
+
+#glue tables
+resource "aws_glue_catalog_table" "forecast_time_dim" {
+  name          = "forecast_time_dim"
+  database_name = aws_glue_catalog_database.ecofarm_gluedb.name
+  table_type    = "EXTERNAL_TABLE"
+
+  storage_descriptor {
+    location      = "s3://forecast-raw-data-${random_string.suffix.result}/forecast_data/forecast_time_dim"
+    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      name                  = "json"
+      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
+    }
+
+    columns {
+      name = "forecast_time_id"
+      type = "bigint"
+    }
+
+    columns {
+      name = "date"
+      type = "date"
+    }
+
+    columns {
+      name = "hour"
+      type = "int"
+    }
+
+    columns {
+      name = "day"
+      type = "int"
+    }
+
+    columns {
+      name = "month"
+      type = "int"
+    }
+
+    columns {
+      name = "year"
+      type = "int"
+    }
+  }
+
+  parameters = {
+    "classification" = "json"
+  }
+}
+
+resource "aws_glue_catalog_table" "location_dim" {
+  name          = "location_dim"
+  database_name = aws_glue_catalog_database.ecofarm_gluedb.name
+  table_type    = "EXTERNAL_TABLE"
+
+  storage_descriptor {
+    location      = "s3://forecast-raw-data-${random_string.suffix.result}/forecast_data/location_dim"
+    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      name                  = "json"
+      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
+    }
+
+    columns {
+      name = "location_id"
+      type = "bigint"
+    }
+
+    columns {
+      name = "city"
+      type = "string"
+    }
+
+    columns {
+      name = "country"
+      type = "string"
+    }
+
+    columns {
+      name = "latitude"
+      type = "double"
+    }
+
+    columns {
+      name = "longitude"
+      type = "double"
+    }
+  }
+
+  parameters = {
+    "classification" = "json"
+  }
+}
+
+resource "aws_glue_catalog_table" "download_time_dim" {
+  name          = "download_time_dim"
+  database_name = aws_glue_catalog_database.ecofarm_gluedb.name
+  table_type    = "EXTERNAL_TABLE"
+
+  storage_descriptor {
+    location      = "s3://forecast-raw-data-${random_string.suffix.result}/forecast_data/download_time_dim"
+    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      name                  = "json"
+      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
+    }
+
+    columns {
+      name = "download_time_id"
+      type = "bigint"
+    }
+
+    columns {
+      name = "timestamp"
+      type = "string"   # could also be 'timestamp' if you write ISO timestamps
+    }
+
+    columns {
+      name = "hour"
+      type = "int"
+    }
+
+    columns {
+      name = "day"
+      type = "int"
+    }
+
+    columns {
+      name = "month"
+      type = "int"
+    }
+
+    columns {
+      name = "year"
+      type = "int"
+    }
+  }
+
+  parameters = {
+    "classification" = "json"
+  }
+}
+
+resource "aws_glue_catalog_table" "forecast_fact" {
+  name          = "forecast_fact"
+  database_name = aws_glue_catalog_database.ecofarm_gluedb.name
+  table_type    = "EXTERNAL_TABLE"
+
+  storage_descriptor {
+    location      = "s3://forecast-raw-data-${random_string.suffix.result}/forecast_data/forecast_fact"
+    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      name                  = "json"
+      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
+    }
+
+    columns {
+      name = "forecast_id"
+      type = "string"
+    }
+
+    columns {
+      name = "location_id"
+      type = "bigint"
+    }
+
+    columns {
+      name = "time_id"
+      type = "bigint"
+    }
+
+    columns {
+      name = "temperature_c"
+      type = "double"
+    }
+
+    columns {
+      name = "rain_mm"
+      type = "double"
+    }
+
+    columns {
+      name = "solarradiation_w"
+      type = "double"
+    }
+
+    columns {
+      name = "cloudcover"
+      type = "int"
+    }
+
+    columns {
+      name = "wind_speed_kmh"
+      type = "double"
+    }
+
+    columns {
+      name = "humidity"
+      type = "double"
+    }
+
+    columns {
+      name = "weather_condition"
+      type = "string"
+    }
+  }
+
+  parameters = {
+    "classification" = "json"
+  }
+}
+
 
 # IAM role for Glue
 resource "aws_iam_role" "glue_role" {

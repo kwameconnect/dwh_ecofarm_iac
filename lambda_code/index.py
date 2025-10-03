@@ -17,7 +17,7 @@ def handler(event, context):
 
         logger.info(f"API key loaded, target bucket: {bucket}")
 
-        # Example API call
+        # API call
         response = requests.get(
             f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/Accra?key={api_key}"
         )
