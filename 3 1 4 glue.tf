@@ -62,7 +62,7 @@ resource "aws_glue_catalog_table" "forecast_time_dim" {
   table_type    = "EXTERNAL_TABLE"
 
   storage_descriptor {
-    location      = "s3://forecast-raw-data-${random_string.suffix.result}/forecast_data/forecast_time_dim"
+    location      = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/forecast_time_dim"
     input_format  = "org.apache.hadoop.mapred.TextInputFormat"
     output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
 
@@ -113,7 +113,7 @@ resource "aws_glue_catalog_table" "location_dim" {
   table_type    = "EXTERNAL_TABLE"
 
   storage_descriptor {
-    location      = "s3://forecast-raw-data-${random_string.suffix.result}/forecast_data/location_dim"
+    location      = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/location_dim"
     input_format  = "org.apache.hadoop.mapred.TextInputFormat"
     output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
 
@@ -159,7 +159,7 @@ resource "aws_glue_catalog_table" "download_time_dim" {
   table_type    = "EXTERNAL_TABLE"
 
   storage_descriptor {
-    location      = "s3://forecast-raw-data-${random_string.suffix.result}/forecast_data/download_time_dim"
+    location      = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/download_time_dim"
     input_format  = "org.apache.hadoop.mapred.TextInputFormat"
     output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
 
@@ -175,7 +175,7 @@ resource "aws_glue_catalog_table" "download_time_dim" {
 
     columns {
       name = "timestamp"
-      type = "string"   # could also be 'timestamp' if you write ISO timestamps
+      type = "string" # could also be 'timestamp' if you write ISO timestamps
     }
 
     columns {
@@ -210,7 +210,7 @@ resource "aws_glue_catalog_table" "forecast_fact" {
   table_type    = "EXTERNAL_TABLE"
 
   storage_descriptor {
-    location      = "s3://forecast-raw-data-${random_string.suffix.result}/forecast_data/forecast_fact"
+    location      = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/forecast_fact"
     input_format  = "org.apache.hadoop.mapred.TextInputFormat"
     output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
 
@@ -272,6 +272,190 @@ resource "aws_glue_catalog_table" "forecast_fact" {
 
   parameters = {
     "classification" = "json"
+  }
+}
+
+resource "aws_glue_catalog_table" "solar_energy_time_dim" {
+  name          = "solar_energy_time_dim"
+  database_name = aws_glue_catalog_database.ecofarm_gluedb.name
+  table_type    = "EXTERNAL_TABLE"
+
+  parameters = {
+    classification = "json"
+  }
+
+  storage_descriptor {
+    location      = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/solar_time_dim/"
+    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      name                  = "json"
+      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
+    }
+
+    columns {
+      name = "solar_energy_time_id"
+      type = "bigint"
+    }
+    columns {
+      name = "date"
+      type = "date"
+    }
+    columns {
+      name = "hour"
+      type = "int"
+    }
+    columns {
+      name = "day"
+      type = "int"
+    }
+    columns {
+      name = "month"
+      type = "int"
+    }
+    columns {
+      name = "year"
+      type = "int"
+    }
+  }
+}
+
+resource "aws_glue_catalog_table" "solar_energy_fact" {
+  name          = "solar_energy_fact"
+  database_name = aws_glue_catalog_database.ecofarm_gluedb.name
+  table_type    = "EXTERNAL_TABLE"
+
+  parameters = {
+    classification = "json"
+  }
+
+  storage_descriptor {
+    location      = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/solar_energy_fact/"
+    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      name                  = "json"
+      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
+    }
+
+    columns {
+      name = "energy_id"
+      type = "bigint"
+    }
+    columns {
+      name    = "location_id"
+      type    = "bigint"
+      comment = "FK to locations_dim.location_id"
+    }
+    columns {
+      name    = "energy_time_id"
+      type    = "bigint"
+      comment = "FK to solar_energy_time_dim.solar_energy_time_id"
+    }
+    columns {
+      name = "solarenergy_kwh"
+      type = "decimal(10,2)"
+    }
+    columns {
+      name = "date_uploaded"
+      type = "date"
+    }
+  }
+}
+
+resource "aws_glue_catalog_table" "water_level_time_dim" {
+  name          = "water_level_time_dim"
+  database_name = aws_glue_catalog_database.ecofarm_gluedb.name
+  table_type    = "EXTERNAL_TABLE"
+
+  parameters = {
+    classification = "json"
+  }
+
+  storage_descriptor {
+    location      = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/water_level_time_dim/"
+    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      name                  = "json"
+      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
+    }
+
+    columns {
+      name = "water_level_time_id"
+      type = "bigint"
+    }
+    columns {
+      name = "date"
+      type = "date"
+    }
+    columns {
+      name = "hour"
+      type = "int"
+    }
+    columns {
+      name = "day"
+      type = "int"
+    }
+    columns {
+      name = "month"
+      type = "int"
+    }
+    columns {
+      name = "year"
+      type = "int"
+    }
+  }
+}
+
+resource "aws_glue_catalog_table" "water_level_fact" {
+  name          = "water_level_fact"
+  database_name = aws_glue_catalog_database.ecofarm_gluedb.name
+  table_type    = "EXTERNAL_TABLE"
+
+  parameters = {
+    classification = "json"
+  }
+
+  storage_descriptor {
+    location      = "s3://forecast-processed-data-${random_string.suffix.result}/forecast_data/water_level_fact/"
+    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      name                  = "json"
+      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
+    }
+
+    columns {
+      name = "water_level_id"
+      type = "bigint"
+    }
+    columns {
+      name    = "location_id"
+      type    = "bigint"
+      comment = "FK to locations_dim.location_id"
+    }
+    columns {
+      name    = "level_time_id"
+      type    = "bigint"
+      comment = "FK to water_level_time_dim.water_level_time_id"
+    }
+    columns {
+      name = "water_level_mm"
+      type = "bigint"
+    }
+    columns {
+      name = "rain_collected_mm"
+      type = "bigint"
+    }
+    columns {
+      name = "date_uploaded"
+      type = "date"
+    }
   }
 }
 

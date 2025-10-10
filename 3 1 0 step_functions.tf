@@ -1,19 +1,27 @@
-# /dwh_iac/step_functions.tf
 resource "aws_sfn_state_machine" "forecast_pipeline" {
   name     = "forecast-pipeline"
   role_arn = aws_iam_role.step_functions_role.arn
 
-  # Enable logging into CloudWatch Logs
+  # ✅ CloudWatch logging
   logging_configuration {
-    level                  = "ALL" # Options: OFF, ERROR, ALL
-    include_execution_data = true
-    log_destination        = "${aws_cloudwatch_log_group.step_functions_logs.arn}:*"
+    level                  = "ALL" # capture everything
+    include_execution_data = true  # store input/output in logs
+    log_destination = "${aws_cloudwatch_log_group.step_functions_logs.arn}:*"
   }
 
   definition = jsonencode({
-    Comment = "Weather Forecast DWH Pipeline with error handling",
-    StartAt = "RunApiIngest",
+    Comment = "Sequential DWH Orchestration: Measure → Forecast → ETL → Crawler",
+    StartAt = "MeasureIngest",
     States = {
+      MeasureIngest = {
+        Type     = "Task",
+        Resource = "arn:aws:states:::lambda:invoke",
+        Parameters = {
+          FunctionName = aws_lambda_function.measure_ingest.arn
+        },
+        Next = "RunApiIngest"
+      },
+
       RunApiIngest = {
         Type     = "Task",
         Resource = "arn:aws:states:::lambda:invoke",
@@ -30,12 +38,10 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
           }
         ],
         Catch = [
-          {
-            ErrorEquals = ["States.ALL"],
-            Next        = "FailState"
-          }
+          { ErrorEquals = ["States.ALL"], Next = "FailState" }
         ]
       },
+
       RunETLJob = {
         Type     = "Task",
         Resource = "arn:aws:states:::glue:startJobRun",
@@ -52,12 +58,10 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
           }
         ],
         Catch = [
-          {
-            ErrorEquals = ["States.ALL"],
-            Next        = "FailState"
-          }
+          { ErrorEquals = ["States.ALL"], Next = "FailState" }
         ]
       },
+
       RunCrawler = {
         Type     = "Task",
         Resource = "arn:aws:states:::aws-sdk:glue:startCrawler",
@@ -74,88 +78,84 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
           }
         ],
         Catch = [
-          {
-            ErrorEquals = ["States.ALL"],
-            Next        = "FailState"
-          }
+          { ErrorEquals = ["States.ALL"], Next = "FailState" }
         ]
       },
 
       FailState = {
         Type  = "Fail",
         Error = "PipelineFailed",
-        Cause = "Pipeline execution failed at some step. errors are pushed into '/aws/states/forecast_pipeline' in CloudWatch"
+        Cause = "Pipeline failed — check CloudWatch logs under /aws/states/forecast_pipeline"
       }
     }
   })
 }
 
-# Step Functions IAM Role
 resource "aws_iam_role" "step_functions_role" {
-  name = "forecast_step_functions_role"
+  name = "step-functions-forecast-role"
+
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Action    = "sts:AssumeRole",
-      Effect    = "Allow",
-      Principal = { Service = "states.amazonaws.com" }
-    }]
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "states.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
   })
 }
 
-# Permissions for Step Functions
 resource "aws_iam_role_policy" "step_functions_policy" {
+  name = "step-functions-forecast-policy"
   role = aws_iam_role.step_functions_role.id
+
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow",
-        Action   = ["glue:StartCrawler", "glue:StartJobRun"],
-        Resource = "*"
+        Sid    = "LambdaInvoke"
+        Effect = "Allow"
+        Action = ["lambda:InvokeFunction", "lambda:InvokeAsync"]
+        Resource = [
+          aws_lambda_function.measure_ingest.arn,
+          aws_lambda_function.forecast_api_ingest.arn
+        ]
       },
       {
-        Effect   = "Allow",
-        Action   = ["lambda:InvokeFunction"],
-        Resource = aws_lambda_function.forecast_api_ingest.arn
-      },
-      {
-        Effect = "Allow",
+        Sid    = "GlueJobAndCrawler"
+        Effect = "Allow"
         Action = [
+          "glue:StartJobRun",
+          "glue:GetJobRun",
+          "glue:GetJobRuns",
+          "glue:BatchStopJobRun",
+          "glue:StartCrawler",
+          "glue:GetCrawler",
+          "glue:GetCrawlers"
+        ]
+        Resource = [
+          aws_glue_job.forecast_etl.arn,
+          aws_glue_crawler.forecast_proc_crawler.arn
+        ]
+      },
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:PutRetentionPolicy",
           "logs:CreateLogDelivery",
           "logs:GetLogDelivery",
           "logs:UpdateLogDelivery",
           "logs:DeleteLogDelivery",
-          "logs:ListLogDeliveries",
-          "logs:PutLogEvents",
-          "logs:CreateLogStream"
-        ],
+          "logs:ListLogDeliveries"
+        ]
         Resource = "*"
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
-        ],
-        Resource = "*"
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "logs:PutResourcePolicy",
-          "logs:DescribeResourcePolicies",
-          "logs:DeleteResourcePolicy"
-        ],
-        Resource = "*"
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:PutRetentionPolicy"
-        ],
-        Resource = aws_cloudwatch_log_group.step_functions_logs.arn
       }
     ]
   })

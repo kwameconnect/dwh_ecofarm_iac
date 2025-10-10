@@ -58,6 +58,10 @@ resource "random_string" "suffix" {
   length  = 8
   special = false
   upper   = false
+  #keep current bucket suffix
+  keepers = {
+    static_suffix = "kqbc9zgk"
+  }
 }
 
 # -------------------------------
@@ -83,14 +87,14 @@ resource "aws_budgets_budget" "monthly" {
 # AWS S3 Serverless Storage Service
 # ----------------------------------
 resource "aws_s3_bucket" "forecast_raw" {
-  bucket = "forecast-raw-data-${random_string.suffix.result}"
+  bucket = "forecast-raw-data-${random_string.suffix.result}" #replaced '${random_string.suffix.result}' with kqbc9zgk for the sake of reconnecting aws s3 recources after tfstate file delete
   tags = {
     Name = "forecast Raw Data"
   }
 }
 
 resource "aws_s3_bucket" "forecast_processed" {
-  bucket = "forecast-processed-data-${random_string.suffix.result}"
+  bucket = "forecast-processed-data-${random_string.suffix.result}" #replaced '${random_string.suffix.result}' with kqbc9zgk for the sake of reconnecting aws s3 recources after tfstate file delete
   tags = {
     Name = "forecast Processed Data"
   }
