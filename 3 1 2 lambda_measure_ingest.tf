@@ -6,16 +6,16 @@ resource "aws_lambda_function" "measure_ingest" {
   runtime       = "python3.12"
   timeout       = 900
 
-  filename         = "${path.module}/lambda_measure_ingest/measure_ingest.zip"
-  source_code_hash = filebase64sha256("${path.module}/lambda_measure_ingest/measure_ingest.zip")
+  filename         = "${path.module}/measure_ingest.zip"
+  source_code_hash = filebase64sha256("${path.module}/measure_ingest.zip")
   layers = [
     "arn:aws:lambda:eu-north-1:770693421928:layer:Klayers-p312-pandas:17"
   ]
 
   environment {
     variables = {
-      RAW_BUCKET  = aws_s3_bucket.forecast_raw.bucket
-      LOG_LEVEL = "INFO"
+      RAW_BUCKET = aws_s3_bucket.forecast_raw.bucket
+      LOG_LEVEL     = "INFO"
     }
   }
 }

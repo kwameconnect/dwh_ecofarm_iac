@@ -6,7 +6,7 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
   logging_configuration {
     level                  = "ALL" # capture everything
     include_execution_data = true  # store input/output in logs
-    log_destination = "${aws_cloudwatch_log_group.step_functions_logs.arn}:*"
+    log_destination        = "${aws_cloudwatch_log_group.step_functions_logs.arn}:*"
   }
 
   definition = jsonencode({
@@ -19,6 +19,13 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
         Parameters = {
           FunctionName = aws_lambda_function.measure_ingest.arn
         },
+        Catch = [
+          {
+            ErrorEquals = ["States.ALL"],
+            ResultPath  = "$.error",
+            Next        = "RunApiIngest"
+          }
+        ]
         Next = "RunApiIngest"
       },
 

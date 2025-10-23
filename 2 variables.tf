@@ -5,6 +5,18 @@ variable "visualcrossing_api_key" {
   sensitive   = true
 }
 
+variable "latitude" {
+  description = "Ecofarm latitude"
+  type        = number
+  sensitive   = true
+}
+
+variable "longitude" {
+  description = "Ecofarm longitude"
+  type        = number
+  sensitive   = true
+}
+
 variable "instance_type" {
   description = "EC2 instance type (restricted to free tier eligible)"
   type        = string

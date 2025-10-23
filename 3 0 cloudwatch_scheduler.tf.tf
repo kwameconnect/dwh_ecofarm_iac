@@ -1,8 +1,8 @@
 # /dwh_iac/cloudwatch_scheduler.tf
 resource "aws_cloudwatch_event_rule" "daily_pipeline_trigger" {
   name                = "forecast-pipeline-daily"
-  description         = "Triggers Step Functions pipeline daily at 11:50 PM UTC"
-  schedule_expression = "cron(50 16 * * ? *)"
+  description         = "Triggers Step Functions pipeline daily at 10:00 PM UTC"
+  schedule_expression = "cron(00 22 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "step_functions_target" {

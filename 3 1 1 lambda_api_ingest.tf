@@ -1,23 +1,23 @@
-# /iac/lambda.tf invokes lambda_function.zip -> index.py: api response -> S3 forecast_raw bucket as facts&dimensions .json
+# /iac/lambda.tf invokes api_ingest.zip -> API_ingest.py: api response -> S3 forecast_raw bucket as facts&dimensions .json
 resource "aws_lambda_function" "forecast_api_ingest" {
   function_name    = "forecast-api-ingest"
-  handler          = "index.handler"
-  runtime          = "python3.9"
+  handler          = "api_ingest.lambda_handler"
+  runtime          = "python3.12"
   role             = aws_iam_role.lambda_role.arn
-  filename         = "lambda_function.zip"
-  source_code_hash = filebase64sha256("lambda_function.zip")
+  filename         = "api_ingest.zip"
+  source_code_hash = filebase64sha256("api_ingest.zip")
   timeout          = 30
+  layers = [
+    "arn:aws:lambda:eu-north-1:770693421928:layer:Klayers-p312-requests:17"
+  ]
   environment {
     variables = {
       VISUALCROSSING_API_KEY = var.visualcrossing_api_key
+      latitude               = var.latitude
+      longitude              = var.longitude
       S3_RAW_BUCKET          = aws_s3_bucket.forecast_raw.bucket
     }
   }
-  # /iac/lambda.tf (add to aws_lambda_function.forecast_api_ingest)
-  #vpc_config {
-  #  subnet_ids         = aws_subnet.private[*].id
-  #  security_group_ids = [aws_security_group.dwh_sg.id]
-  #}
 }
 
 resource "aws_iam_role" "lambda_role" {
@@ -61,6 +61,13 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "ec2:DescribeNetworkInterfaces",
           "ec2:DeleteNetworkInterface"
         ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "cloudwatch:PutMetricData"
+        ],
         Resource = "*"
       }
     ]
