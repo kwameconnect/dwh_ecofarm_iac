@@ -15,7 +15,7 @@ resource "aws_lambda_function" "measure_ingest" {
   environment {
     variables = {
       RAW_BUCKET = aws_s3_bucket.forecast_raw.bucket
-      LOG_LEVEL     = "INFO"
+      LOG_LEVEL  = "INFO"
     }
   }
 }

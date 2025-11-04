@@ -61,7 +61,7 @@ def lambda_handler(event, context):
     s3.put_object(
         Bucket=raw_bucket,
         Key=f"uploads/forecast/forecast_{download_timestamp_str}.json",
-        Body=json.dumps(forecast_data).encode("utf-8")
+        Body=json.dumps(forecast_data, sort_keys=True).encode("utf-8")
     )
     
     logger.info(f"forecast_{download_timestamp_str}.json written to S3")
@@ -138,7 +138,7 @@ def lambda_handler(event, context):
                 s3.put_object(
                     Bucket=raw_bucket,
                     Key=f"forecast_data/forecast_time_dim/{forecast_time_data['forecast_time_id']}.json",
-                    Body=json.dumps(forecast_time_data)
+                    Body=json.dumps(forecast_time_data, sort_keys=True)
                 )
             except Exception as e:
                 return {
@@ -162,12 +162,12 @@ def lambda_handler(event, context):
         s3.put_object(
             Bucket=raw_bucket,
             Key=f"forecast_data/location_dim/{location_data['location_id']}.json",
-            Body=json.dumps(location_data)
+            Body=json.dumps(location_data, sort_keys=True)
         )
         s3.put_object(
             Bucket=raw_bucket,
             Key=f"forecast_data/download_time_dim/{download_time_data['download_time_id']}.json",
-            Body=json.dumps(download_time_data)
+            Body=json.dumps(download_time_data, sort_keys=True)
         )
     except Exception as e:
         return {
@@ -181,7 +181,7 @@ def lambda_handler(event, context):
             s3.put_object(
                 Bucket=raw_bucket,
                 Key=f"forecast_data/forecast_fact/{record['forecast_id']}.json",
-                Body=json.dumps(record)
+                Body=json.dumps(record, sort_keys=True)
             )
     except Exception as e:
         return {

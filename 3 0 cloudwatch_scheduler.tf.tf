@@ -10,6 +10,9 @@ resource "aws_cloudwatch_event_target" "step_functions_target" {
   target_id = "forecast-pipeline"
   arn       = aws_sfn_state_machine.forecast_pipeline.arn
   role_arn  = aws_iam_role.eventbridge_sfn_role.arn
+  input = jsonencode({
+    action = "MeasureIngest"
+  })
 
 }
 

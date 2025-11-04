@@ -11,22 +11,24 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Variables
-s3 = boto3.client("s3")
-RAW_BUCKET = os.environ["RAW_BUCKET"]
+s3          = boto3.client("s3")
+cloudwatch  = boto3.client("cloudwatch")
+RAW_BUCKET  = os.environ["RAW_BUCKET"]
+city        = "Samsamso Ecofarm"
 
 # Output folders
-SOLAR_FACT_PATH = "uploads/measured/solar_fact/"
-SOLAR_TIME_DIM_PATH = "uploads/measured/solar_time_dim/"
-WATER_FACT_PATH = "uploads/measured/water_level_fact/"
-WATER_TIME_DIM_PATH = "uploads/measured/water_level_time_dim/"
+SOLAR_FACT_PATH     = "measured_data/solar_fact/"
+SOLAR_TIME_DIM_PATH = "measured_data/solar_time_dim/"
+WATER_FACT_PATH     = "measured_data/water_level_fact/"
+WATER_TIME_DIM_PATH = "measured_data/water_level_time_dim/"
 
 # Upload source folders
-SOLAR_UPLOAD_PATH = "uploads/measured/upload/solar/"
-RAIN_UPLOAD_PATH = "uploads/measured/upload/rainfall/"
+SOLAR_UPLOAD_PATH   = "uploads/csv/solar/"
+RAIN_UPLOAD_PATH    = "uploads/csv/rainfall/"
 
 # Metadata files for time ID tracking
-SOLAR_META_PATH = "uploads/measured/metadata/solar_time_meta.json"
-WATER_META_PATH = "uploads/measured/metadata/water_time_meta.json"
+SOLAR_META_PATH     = "measured_data/metadata/solar_time_meta.json"
+WATER_META_PATH     = "measured_data/metadata/water_time_meta.json"
 
 
 def get_last_id(bucket: str, key: str) -> int:
@@ -46,9 +48,26 @@ def get_last_id(bucket: str, key: str) -> int:
 def update_last_id(bucket: str, key: str, last_id: int):
     """Update the metadata file in S3 with the latest ID value."""
     meta = {"last_id": last_id}
-    s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(meta).encode("utf-8"))
+    s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(meta, sort_keys=True).encode("utf-8"))
     logger.info(f"Updated metadata file {key} with last_id={last_id}")
 
+
+def publish_metric(metric_name, value, unit, location, forecast_date, forecast_hour):
+    from datetime import datetime
+    timestamp = datetime.strptime(forecast_date, "%Y-%m-%d").replace(hour=int(forecast_hour))
+    cloudwatch.put_metric_data(
+        Namespace="EcoFarm/Forecast",
+        MetricData=[
+            {
+                "MetricName": metric_name,
+                "Dimensions": [{"Name": "Location", "Value": location}],
+                "Timestamp": timestamp,
+                "Value": float(value),
+                "Unit": "None"
+            }
+        ]
+    )
+    logger.info(f"Metric {metric_name}={value} at {timestamp} for {location}")
 
 
 def read_csv_from_s3(bucket: str, prefix: str):
@@ -83,15 +102,20 @@ def process_solar_data(df: pd.DataFrame, start_id: int):
     next_id = start_id
 
     for _, row in df.iterrows():
+        # variables
         next_id += 1
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+          # date and hour of measurement from csv file
         date = datetime.strptime(str(row["date"]), "%Y-%m-%d")
+        hour = int(row["hour"])
+
         solarenergy_kwh = round(float(row["solarenergy_kwh"]), 2)
+        solarenergy_w   = int(solarenergy_kwh * 1000)  # Convert kWh to Watts
 
         time_record = {
             "solar_energy_time_id": next_id,
             "date": date.strftime("%Y-%m-%d"),
-            "hour": date.hour,
+            "hour": hour,  # CHANGED: uses 'hour' column directly
             "day": date.day,
             "month": date.month,
             "year": date.year
@@ -102,14 +126,16 @@ def process_solar_data(df: pd.DataFrame, start_id: int):
             "location_id": int(row.get("location_id", 1)),
             "energy_time_id": next_id,
             "solarenergy_kwh": solarenergy_kwh,
-            "date_uploaded": timestamp
+            "date_uploaded": timestamp,
+            # --- include daily kWh sum if present in CSV ---
+            "solarenergy_kwh_sum_day": round(float(row.get("solarenergy_kwh_sum_day", 0.0)), 2)
         }
 
         fact_records.append(fact_record)
         time_records.append(time_record)
+        publish_metric("solarenergy_w", solarenergy_w, "Watts", city, date, hour)
 
     return fact_records, time_records, next_id
-
 
 def process_water_data(df: pd.DataFrame, start_id: int):
     """Transform rainfall CSV data into fact and time dimension JSON lines."""
@@ -124,13 +150,14 @@ def process_water_data(df: pd.DataFrame, start_id: int):
         next_id += 1
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         date = datetime.strptime(str(row["date"]), "%Y-%m-%d")
+        hour = int(row["hour"])
         water_level_mm = int(row["water_level_mm"])
         rain_collected_mm = int(row["rain_collected_mm"])
 
         time_record = {
             "water_level_time_id": next_id,
             "date": date.strftime("%Y-%m-%d"),
-            "hour": date.hour,
+            "hour": hour,
             "day": date.day,
             "month": date.month,
             "year": date.year
@@ -147,6 +174,8 @@ def process_water_data(df: pd.DataFrame, start_id: int):
 
         fact_records.append(fact_record)
         time_records.append(time_record)
+        publish_metric("rain_clct_mm", rain_collected_mm, "Millimeters", city, date, hour)
+        publish_metric("water_lvl_mm", water_level_mm, "Millimeters", city, date, hour)
 
     return fact_records, time_records, next_id
 
@@ -167,7 +196,6 @@ def lambda_handler(event, context):
     """Main Lambda entry point."""
     logger.info("Starting measurement ingestion...")
 
-
     # Read last used IDs
     logger.info("Reading last IDs")
     last_solar_id = get_last_id(RAW_BUCKET, SOLAR_META_PATH)
@@ -179,18 +207,18 @@ def lambda_handler(event, context):
     water_df = read_csv_from_s3(RAW_BUCKET, RAIN_UPLOAD_PATH)
 
     # Process solar data
-    logger.info("Processing solar data...")
+    logger.info("Processing solar data")
     solar_fact, solar_time, last_solar_id = process_solar_data(solar_df, last_solar_id)
     write_json_lines_to_s3(RAW_BUCKET, SOLAR_FACT_PATH, solar_fact)
     write_json_lines_to_s3(RAW_BUCKET, SOLAR_TIME_DIM_PATH, solar_time)
     update_last_id(RAW_BUCKET, SOLAR_META_PATH, last_solar_id)
 
     # Process rainfall data
-    logger.info("Processing rainfall data...")
+    logger.info("Processing rainfall data")
     water_fact, water_time, last_water_id = process_water_data(water_df, last_water_id)
     write_json_lines_to_s3(RAW_BUCKET, WATER_FACT_PATH, water_fact)
     write_json_lines_to_s3(RAW_BUCKET, WATER_TIME_DIM_PATH, water_time)
     update_last_id(RAW_BUCKET, WATER_META_PATH, last_water_id)
 
-    logger.info("Measurement ingestion complete.")
+    logger.info("Measurements ingestion complete.")
     return {"status": "success"}

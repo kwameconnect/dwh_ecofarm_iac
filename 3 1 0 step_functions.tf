@@ -11,8 +11,34 @@ resource "aws_sfn_state_machine" "forecast_pipeline" {
 
   definition = jsonencode({
     Comment = "Sequential DWH Orchestration: Measure → Forecast → ETL → Crawler",
-    StartAt = "MeasureIngest",
+    StartAt = "SelectStart",
     States = {
+      SelectStart = {
+        Type = "Choice",
+        Choices = [
+          {
+            Variable     = "$.action",
+            StringEquals = "MeasureIngest",
+            Next         = "MeasureIngest"
+          },
+          {
+            Variable     = "$.action",
+            StringEquals = "RunApiIngest",
+            Next         = "RunApiIngest"
+          },
+          {
+            Variable     = "$.action",
+            StringEquals = "RunETLJob",
+            Next         = "RunETLJob"
+          },
+          {
+            Variable     = "$.action",
+            StringEquals = "RunCrawler",
+            Next         = "RunCrawler"
+          }
+        ],
+        Default = "MeasureIngest" # fallback if no match
+      },
       MeasureIngest = {
         Type     = "Task",
         Resource = "arn:aws:states:::lambda:invoke",
