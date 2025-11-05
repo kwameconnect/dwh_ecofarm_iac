@@ -75,6 +75,13 @@ resource "aws_iam_policy" "measure_ingest_lambda_policy" {
           "arn:aws:s3:::forecast-raw-data-${random_string.suffix.result}",
           "arn:aws:s3:::forecast-processed-data-${random_string.suffix.result}"
         ]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "cloudwatch:PutMetricData"
+        ],
+        Resource = "*"
       }
     ]
   })

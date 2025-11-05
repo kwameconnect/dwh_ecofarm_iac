@@ -48,13 +48,16 @@ def get_last_id(bucket: str, key: str) -> int:
 def update_last_id(bucket: str, key: str, last_id: int):
     """Update the metadata file in S3 with the latest ID value."""
     meta = {"last_id": last_id}
-    s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(meta, sort_keys=True).encode("utf-8"))
+    s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(meta).encode("utf-8"))
     logger.info(f"Updated metadata file {key} with last_id={last_id}")
 
 
-def publish_metric(metric_name, value, unit, location, forecast_date, forecast_hour):
-    from datetime import datetime
-    timestamp = datetime.strptime(forecast_date, "%Y-%m-%d").replace(hour=int(forecast_hour))
+def publish_metric(metric_name, value, unit, location, date, hour):
+    if isinstance(date, str): # CHANGED: Check if date is string before parsing
+        timestamp = datetime.strptime(date, "%Y-%m-%d").replace(hour=int(hour))
+    else:
+        timestamp = date.replace(hour=int(hour))
+
     cloudwatch.put_metric_data(
         Namespace="EcoFarm/Forecast",
         MetricData=[
@@ -63,10 +66,11 @@ def publish_metric(metric_name, value, unit, location, forecast_date, forecast_h
                 "Dimensions": [{"Name": "Location", "Value": location}],
                 "Timestamp": timestamp,
                 "Value": float(value),
-                "Unit": "None"
+                "Unit": unit    # previously "None" and did not pass on the given unit
             }
         ]
     )
+    # --- CHANGED: Log message now prints the same timestamp variable for clarity ---
     logger.info(f"Metric {metric_name}={value} at {timestamp} for {location}")
 
 
